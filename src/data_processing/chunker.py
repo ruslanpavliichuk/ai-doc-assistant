@@ -1,11 +1,4 @@
 from transformers import AutoTokenizer
-import re
-
-
-def split_paragraphs(text: str) -> list[str]:
-    """Splits text by two or more newline characters."""
-    return [p.strip() for p in re.split(r'\n{2,}', text) if p.strip()]
-
 
 class TokenChunker:
     """
