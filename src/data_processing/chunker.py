@@ -1,45 +1,133 @@
-from transformers import AutoTokenizer
+import re
+from typing import List, Dict, Any, Optional
+from .models import Chunk
 
 class TokenChunker:
-    """
-    A class to split text into chunks based on token count using a Hugging Face tokenizer.
-    """
-    def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
-        """
-        Initializes the chunker and loads the tokenizer.
 
-        Args:
-            model_name (str): The name of the Hugging Face model whose tokenizer will be used.
-        """
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+    def __init__(self, strategy: str = "tokens"):
+        if strategy not in {"tokens", "sentences", "paragraphs"}:
+            raise ValueError("strategy must be one of {'tokens', 'sentences', or 'paragraphs'}")
+        self.strategy = strategy
 
-    def chunk(self, text: str, chunk_size: int = 200, chunk_overlap: int = 50) -> list[str]:
-        """
-        Splits a text into chunks of a specified token size with overlap.
 
-        Args:
-            text (str): The text to be chunked.
-            chunk_size (int): The desired number of tokens in each chunk.
-            chunk_overlap (int): The number of tokens to overlap between consecutive chunks.
 
-        Returns:
-            list[str]: A list of text chunks.
-        """
-        if chunk_overlap >= chunk_size:
-            raise ValueError("chunk_overlap must be smaller than chunk_size")
+    def chunk(
+        self,
+        text: str,
+        chunk_size: int = 200,
+        chunk_overlap: int = 50,
+        *,
+        source_id: Optional[str] = None,
+        source_path: Optional[str] = None,
+        extra_meta: Optional[Dict[str, Any]] = None,
+    ) -> List[Chunk]:
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be > 0")
+        if chunk_overlap < 0 or chunk_overlap >= chunk_size:
+            raise ValueError("chunk_overlap must be >= 0 and < chunk_size")
 
-        # Encode the text into token IDs, without adding special tokens like [CLS] or [SEP]
-        tokens = self.tokenizer.encode(text, add_special_tokens=False)
+        base_meta: Dict[str, Any] = {
+            "source_id": source_id,
+            "source_path": source_path,
+            "strategy": self.strategy,
+        }
+        if extra_meta:
+            base_meta.update(extra_meta)
 
-        chunks = []
-        # Iterate through tokens with a step equal to chunk_size minus overlap
-        for i in range(0, len(tokens), chunk_size - chunk_overlap):
-            chunk_tokens = tokens[i:i + chunk_size]
-            if not chunk_tokens:
-                continue
+        if self.strategy == "tokens":
+            return self._chunk_by_tokens(text, chunk_size, chunk_overlap, base_meta)
+        if self.strategy == "sentences":
+            return self._chunk_by_sentences(text, chunk_size, chunk_overlap, base_meta)
 
-            # Decode the token chunk back into a string
-            chunk_text = self.tokenizer.decode(chunk_tokens, skip_special_tokens=True)
-            chunks.append(chunk_text)
+        return self._chunk_by_paragraphs(text, chunk_size, chunk_overlap, base_meta)
+
+    def _chunk_by_tokens(
+        self, text: str, chunk_size: int, chunk_overlap: int, base_meta: Dict[str, Any]
+    ) -> List[Chunk]:
+        tokens = text.split()
+        if not tokens:
+            return []
+
+        step = chunk_size - chunk_overlap
+        chunks: List[Chunk] = []
+        start = 0
+        idx = 0
+
+
+        while start < len(tokens):
+            end = min(start + chunk_size, len(tokens))
+            piece = ".".join(tokens[start:end])
+            meta = {
+                **base_meta,
+                "chunk_index": idx,
+                "start_token": start,
+                "end_token": end,
+            }
+
+            chunks.append(Chunk(text=piece, metadata=meta))
+            idx += 1
+            if end == len(tokens):
+                break
+            start += step
+
+        return chunks
+
+    def _split_sentences(self, text: str) -> List[str]:
+        parts = re.split(r"(?<=[.!?])\s+", text.strip())
+        return [p for p in parts if p]
+
+    def _chunk_by_sentences(
+        self, text: str, chunk_size: int, chunk_overlap: int, base_meta: Dict[str, Any]
+    ) -> List[Chunk]:
+        sentences = self._split_sentences(text)
+        if not sentences:
+            return []
+
+        step = max (1, chunk_size - chunk_overlap)
+        chunks: List[Chunk] = []
+        idx = 0
+
+        for start in range(0, len(sentences), step):
+            end = min(start + chunk_size, len(sentences))
+            piece = ".".join(sentences[start:end])
+            meta = {
+                **base_meta,
+                "chunk_index": idx,
+                "start_sentence": start,
+                "end_sentence": end,
+            }
+            chunks.append(Chunk(text=piece, metadata=meta))
+            idx += 1
+            if end == len(sentences):
+                break
+
+        return chunks
+
+
+    def _chunk_by_paragraphs(
+        self, text: str, chunk_size: int, chunk_overlap: int, base_meta: Dict[str, Any]
+    ) -> List[Chunk]:
+        paragraphs = re.split(r"\n{2,}", text.strip())
+        paragraphs = [p.strip() for p in paragraphs if p.string()]
+        if not paragraphs:
+            return []
+
+        step = max(1, chunk_size - chunk_overlap)
+        chunks: List[Chunk] = []
+        idx = 0
+
+        for start in range(0, len(paragraphs), step):
+            end = min(start + chunk_size, len(paragraphs))
+            piece = "\n\n".join(paragraphs[start:end])
+            meta = {
+                **base_meta,
+                "chunk_index": idx,
+                "start_paragraph": start,
+                "end_paragraph": end,
+            }
+            chunks.append(Chunk(text=piece, metadata=meta))
+            idx += 1
+            if end == len(paragraphs):
+                break
 
         return chunks
