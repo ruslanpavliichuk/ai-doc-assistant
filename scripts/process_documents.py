@@ -7,15 +7,7 @@ sys.path.insert(0, str(project_root))
 from src.data_processing.parser import parse_pdf, parse_html
 from src.data_processing.chunker import TokenChunker
 
-
 def parse_document(file_path: str) -> str:
-    """
-    Parses a document, automatically detecting the file type (PDF or HTML).
-    Args:
-        file_path (str): The path to the document.
-    Returns:
-        str: The extracted text content.
-    """
     file_path_obj = Path(file_path)
     if not file_path_obj.exists():
         raise FileNotFoundError(f"The file was not found: {file_path}")
@@ -33,37 +25,38 @@ def parse_document(file_path: str) -> str:
 
 
 def process_document(file_path: str):
-    """
-    Processes a single document by parsing it and splitting it into chunks.
-    """
     print(f"--> Processing document: {file_path}")
     text = parse_document(file_path)
     if not text:
         print(f"Warning: No text extracted from {file_path}")
         return []
 
-    # Instantiate the chunker and then call the chunk method with parameters
-    chunker = TokenChunker()
-    chunks = chunker.chunk(text, chunk_size=200, chunk_overlap=50)
+    source_id = Path(file_path).name
+    chunker = TokenChunker(strategy="tokens")  # options: 'tokens', 'sentences', 'paragraphs'
+    chunks = chunker.chunk(
+        text,
+        chunk_size=200,
+        chunk_overlap=50,
+        source_id=source_id,
+        source_path=str(Path(file_path).resolve()),
+        extra_meta={"file_type": Path(file_path).suffix.lower()},
+    )
 
     return chunks
 
 
 if __name__ == "__main__":
-    # --- IMPORTANT ---
-    # Change this path to the document you want to process.
-    # Using the test HTML file as an example.
-    document_path = "tests/data/test.html"
-
+    document_path = "../tests/data/test.html"
     try:
         document_chunks = process_document(document_path)
 
         if document_chunks:
             print(f"\n--> Successfully created {len(document_chunks)} chunks.")
             for i, chunk in enumerate(document_chunks[:3], 1):
-                print(f"\n--- Chunk {i} ---\n{chunk}")
+                print(f"\n--- Chunk {i} ---")
+                print(chunk.text[:300] + ("..." if len(chunk.text) > 300 else ""))
+                print("Metadata:", {k: v for k, v in chunk.metadata.items() if k != "source_path"})
         else:
             print("--> No chunks were created.")
-
     except (FileNotFoundError, ValueError) as e:
         print(f"Error: {e}")
