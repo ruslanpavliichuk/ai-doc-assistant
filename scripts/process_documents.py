@@ -5,7 +5,7 @@ project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.data_processing.parser import parse_pdf, parse_html
-from src.data_processing.chunker import TokenChunker
+from src.data_processing.chunker import TokenChunker, chunk_document
 
 def parse_document(file_path: str) -> str:
     file_path_obj = Path(file_path)
@@ -32,9 +32,10 @@ def process_document(file_path: str):
         return []
 
     source_id = Path(file_path).name
-    chunker = TokenChunker(strategy="tokens")  # options: 'tokens', 'sentences', 'paragraphs'
-    chunks = chunker.chunk(
+    # You can switch strategy to 'sentences' or 'paragraphs' if desired
+    chunks = chunk_document(
         text,
+        strategy="tokens",
         chunk_size=200,
         chunk_overlap=50,
         source_id=source_id,
@@ -46,7 +47,7 @@ def process_document(file_path: str):
 
 
 if __name__ == "__main__":
-    document_path = "../tests/data/test.html"
+    document_path = "../data/raw/tutorial.pdf"
     try:
         document_chunks = process_document(document_path)
 
