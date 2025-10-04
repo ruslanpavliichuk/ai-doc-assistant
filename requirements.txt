@@ -13,6 +13,7 @@ pymupdf
 beautifulsoup4
 langchain
 langchain-text-splitters
+python-dotenv
 
 # Testing
 pytest
