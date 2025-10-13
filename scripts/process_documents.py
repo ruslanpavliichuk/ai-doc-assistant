@@ -1,11 +1,12 @@
 import sys
+import json
 from pathlib import Path
 
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.data_processing.parser import parse_pdf, parse_html
-from src.data_processing.chunker import TokenChunker, chunk_document
+from src.data_processing.chunker import chunk_document
 
 def parse_document(file_path: str) -> str:
     file_path_obj = Path(file_path)
@@ -57,6 +58,8 @@ if __name__ == "__main__":
                 print(f"\n--- Chunk {i} ---")
                 print(chunk.text[:300] + ("..." if len(chunk.text) > 300 else ""))
                 print("Metadata:", {k: v for k, v in chunk.metadata.items() if k != "source_path"})
+                json_file = json.dumps(chunk.metadata, indent=2)
+                print("Metadata (JSON):", json_file)
         else:
             print("--> No chunks were created.")
     except (FileNotFoundError, ValueError) as e:
