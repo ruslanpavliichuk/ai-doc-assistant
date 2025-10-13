@@ -6,8 +6,8 @@ from typing import List
 
 import pytest
 
-from data_processing.models import Chunk
-from core.embeddings import embed_chunks
+from src.data_processing.models import Chunk
+from src.core.embeddings import embed_chunks
 
 
 def test_embed_single_chunk(monkeypatch):
@@ -128,4 +128,3 @@ def test_step_2_2_criteria():
     assert embed_chunks.__doc__ is not None
     assert "Service wrapper" in embed_chunks.__doc__
     assert "Step 2.2" in embed_chunks.__doc__
-

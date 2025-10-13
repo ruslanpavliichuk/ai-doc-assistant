@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from data_processing.models import Chunk
-from core.vector_store import VectorStore
+from src.data_processing.models import Chunk
+from src.core.vector_store import VectorStore
 
 
 @pytest.fixture
@@ -253,4 +253,3 @@ def test_step_3_criteria_summary(vector_store):
     assert results[0]["id"] == ids[0]
     assert results[0]["text"] == "Test content"
     assert results[0]["metadata"]["source_id"] == "test.pdf"
-

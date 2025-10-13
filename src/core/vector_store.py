@@ -2,18 +2,13 @@
 Vector store implementation using ChromaDB (Step 3.2 & 3.3)
 Handles storage and retrieval of document embeddings with metadata.
 """
+import os
 import uuid
 from typing import List, Dict, Any, Optional, Tuple
 import chromadb
 from chromadb.config import Settings
 
-# Import project models using relative path
-import sys
-from pathlib import Path
-# Add parent directory to path to enable imports
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from data_processing.models import Chunk
+from src.data_processing.models import Chunk
 
 
 class VectorStore:
@@ -23,32 +18,62 @@ class VectorStore:
     Configuration (Step 3.2):
     - Vector dimension: 768 (Gemini text-embedding-004)
     - Distance metric: Cosine similarity
-    - Storage: Persistent local database
+    - Storage: Chroma Cloud (remote) or local persistent database
 
     Storage logic (Step 3.3):
     - Each record contains: unique ID, embedding vector, metadata
     - Metadata includes: source document, chunk index, original text
     """
 
-    def __init__(self, collection_name: str = "documents", persist_directory: str = "./chroma_db"):
+    def __init__(
+        self,
+        collection_name: str = "embeddings",
+        persist_directory: str = "./chroma_db",
+        use_cloud: bool = True
+    ):
         """
         Initialize ChromaDB vector store.
 
         Args:
             collection_name: Name of the collection to store embeddings
-            persist_directory: Directory to persist the database
+            persist_directory: Directory to persist the database (local mode)
+            use_cloud: Whether to use Chroma Cloud (True) or local storage (False)
         """
-        # Step 3.2: Configure ChromaDB with persistence
-        self.client = chromadb.PersistentClient(
-            path=persist_directory,
-            settings=Settings(
-                anonymized_telemetry=False,
-                allow_reset=True
+        # Step 3.2: Configure ChromaDB with cloud or local persistence
+        if use_cloud:
+            # Use Chroma Cloud
+            chroma_api_key = os.environ.get("CHROMA_API_KEY")
+            tenant = os.environ.get("TENANT")
+            database = os.environ.get("DATABASE")
+
+            if not all([chroma_api_key, tenant, database]):
+                raise ValueError(
+                    "Chroma Cloud credentials missing. Please set CHROMA_API_KEY, "
+                    "TENANT, and DATABASE in .env.local"
+                )
+
+            self.client = chromadb.HttpClient(
+                host="api.trychroma.com",
+                ssl=True,
+                headers={
+                    "x-chroma-token": chroma_api_key
+                },
+                tenant=tenant,
+                database=database
             )
-        )
+            print(f"✅ Connected to Chroma Cloud - Database: {database}, Tenant: {tenant}")
+        else:
+            # Use local persistent storage
+            self.client = chromadb.PersistentClient(
+                path=persist_directory,
+                settings=Settings(
+                    anonymized_telemetry=False,
+                    allow_reset=True
+                )
+            )
+            print(f"✅ Connected to local ChromaDB at: {persist_directory}")
 
         # Create or get collection with cosine similarity metric
-        # ChromaDB uses L2 by default, but we can normalize vectors for cosine similarity
         self.collection = self.client.get_or_create_collection(
             name=collection_name,
             metadata={
@@ -57,6 +82,7 @@ class VectorStore:
                 "embedding_dimension": 768  # Gemini text-embedding-004 dimension
             }
         )
+        print(f"✅ Using collection: {collection_name}")
 
     def add_chunks(
         self,
