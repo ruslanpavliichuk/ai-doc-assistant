@@ -1,0 +1,4 @@
+"Retrieval-Augmented Generation (RAG) is a technique for enhancing the accuracy and reliability of large language models (LLMs) with facts fetched from external sources. It is a powerful approach for building chatbots and question-answering systems."
+"The first step in a RAG pipeline is data ingestion and processing. This involves loading documents from various sources, such as text files, PDFs, or websites. After loading, the documents are split into smaller, manageable chunks."
+"These chunks are then converted into numerical representations called embeddings using a sentence-transformer model. The embeddings are stored in a specialized vector database, which allows for efficient similarity search."
+"When a user asks a question, their query is also converted into an embedding. The system then searches the vector database to find the text chunks with embeddings most similar to the query's embedding. These chunks provide relevant context for the final answer."
