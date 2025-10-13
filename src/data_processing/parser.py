@@ -1,6 +1,7 @@
 # Module for parsing HTML and PDF
 from bs4 import BeautifulSoup
 import pymupdf
+from pathlib import Path
 
 def parse_html(html_content):
     """
@@ -31,3 +32,33 @@ def parse_pdf(file_path):
     except Exception as e:
         print(f"Error processing file {file_path}: {e}")
         return ""
+
+def parse_document(file_path):
+    """
+    Parse a document (PDF or HTML) and extract text.
+    Automatically detects file type based on extension.
+
+    Args:
+        file_path (str): The path to the document file.
+
+    Returns:
+        str: Extracted text from the document.
+
+    Raises:
+        ValueError: If file type is not supported.
+    """
+    file_path = Path(file_path)
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    extension = file_path.suffix.lower()
+
+    if extension == '.pdf':
+        return parse_pdf(str(file_path))
+    elif extension in ['.html', '.htm']:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        return parse_html(html_content)
+    else:
+        raise ValueError(f"Unsupported file type: {extension}. Supported types: .pdf, .html, .htm")
