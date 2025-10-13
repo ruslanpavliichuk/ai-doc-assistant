@@ -38,8 +38,12 @@ def get_vector_store():
     Initialize ChromaDB with:
     - Vector dimension: 768 (Gemini text-embedding-004)
     - Distance metric: Cosine similarity
+    - Storage: Chroma Cloud
     """
-    return VectorStore(collection_name="documents", persist_directory="./chroma_db")
+    return VectorStore(
+        collection_name="embeddings",  # Your Chroma Cloud collection
+        use_cloud=True  # Use Chroma Cloud instead of local storage
+    )
 
 vector_store = get_vector_store()
 
@@ -107,6 +111,37 @@ if uploaded_file is not None:
             except Exception as e:
                 status.update(label="❌ Error processing document", state="error")
                 st.sidebar.error(f"Error: {str(e)}")
+
+st.sidebar.divider()
+
+# ---- Database Statistics ---- #
+st.sidebar.header("📊 Database Stats")
+try:
+    total_chunks = vector_store.count()
+    st.sidebar.metric("Total Chunks", total_chunks)
+
+    if total_chunks > 0:
+        # Get all items to show unique sources
+        all_items = vector_store.collection.get()
+        if all_items and all_items["metadatas"]:
+            unique_sources = set(
+                meta.get("source_id", "unknown")
+                for meta in all_items["metadatas"]
+            )
+            st.sidebar.metric("Documents", len(unique_sources))
+
+            with st.sidebar.expander("📄 View Sources"):
+                for source in unique_sources:
+                    chunks_in_source = sum(
+                        1 for meta in all_items["metadatas"]
+                        if meta.get("source_id") == source
+                    )
+                    st.write(f"• {source} ({chunks_in_source} chunks)")
+    else:
+        st.sidebar.info("👈 Upload a document to get started")
+
+except Exception as e:
+    st.sidebar.error(f"Error reading stats: {str(e)}")
 
 st.sidebar.divider()
 
@@ -186,14 +221,13 @@ if prompt := st.chat_input("Ask me anything about your documentation..."):
 
     # Generate AI response with RAG
     with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            try:
-                # Get relevant context from vector store (RAG)
-                context, sources = get_relevant_context(prompt, top_k=3)
+        try:
+            # Get relevant context from vector store (RAG)
+            context, sources = get_relevant_context(prompt, top_k=3)
 
-                # Create enhanced prompt with context
-                if context:
-                    enhanced_prompt = f"""Based on the following context from the documentation, please answer the user's question.
+            # Create enhanced prompt with context
+            if context:
+                enhanced_prompt = f"""Based on the following context from the documentation, please answer the user's question.
 
 Context:
 {context}
@@ -201,36 +235,45 @@ Context:
 User Question: {prompt}
 
 Please provide a clear and helpful answer based on the context above. If the context doesn't contain relevant information, say so and provide a general answer."""
-                else:
-                    enhanced_prompt = prompt
+            else:
+                enhanced_prompt = prompt
 
-                # Create chat context from history
-                chat = model.start_chat(history=[])
+            # Create chat context from history
+            chat = model.start_chat(history=[])
 
-                # Add previous messages for context (excluding the current one)
-                for msg in st.session_state.chat_history[:-1]:
-                    if msg["role"] == "user":
-                        chat.send_message(msg["content"])
+            # Add previous messages for context (excluding the current one)
+            for msg in st.session_state.chat_history[:-1]:
+                if msg["role"] == "user":
+                    chat.send_message(msg["content"])
 
-                # Send current message and get response
-                response = chat.send_message(enhanced_prompt)
-                full_response = response.text
+            # Send current message and get streaming response
+            response = chat.send_message(enhanced_prompt, stream=True)
 
-                st.markdown(full_response)
+            # Display streaming response
+            message_placeholder = st.empty()
+            full_response = ""
 
-                # Show sources if available
-                if sources:
-                    with st.expander("📚 Sources"):
-                        for i, source in enumerate(sources, 1):
-                            st.markdown(f"**Source {i}:** (Similarity: {source['similarity']:.2%})")
-                            st.text(f"📄 Document: {source['metadata'].get('source_id', 'Unknown')}")
-                            st.text(f"📍 Chunk: {source['metadata'].get('chunk_index', 'N/A')}")
-                            st.markdown(f"```\n{source['text'][:300]}...\n```")
+            for chunk in response:
+                if chunk.text:
+                    full_response += chunk.text
+                    message_placeholder.markdown(full_response + "▌")
 
-            except Exception as e:
-                full_response = f"❌ Error: {str(e)}"
-                st.error(full_response)
-                sources = []
+            # Remove cursor and show final response
+            message_placeholder.markdown(full_response)
+
+            # Show sources if available
+            if sources:
+                with st.expander("📚 Sources"):
+                    for i, source in enumerate(sources, 1):
+                        st.markdown(f"**Source {i}:** (Similarity: {source['similarity']:.2%})")
+                        st.text(f"📄 Document: {source['metadata'].get('source_id', 'Unknown')}")
+                        st.text(f"📍 Chunk: {source['metadata'].get('chunk_index', 'N/A')}")
+                        st.markdown(f"```\n{source['text'][:300]}...\n```")
+
+        except Exception as e:
+            full_response = f"❌ Error: {str(e)}"
+            st.error(full_response)
+            sources = []
 
     # Add assistant response to history
     history_entry = {"role": "assistant", "content": full_response}
