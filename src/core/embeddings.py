@@ -3,13 +3,7 @@ from typing import List, Optional, Union
 from dotenv import load_dotenv
 import google.generativeai as genai
 
-# Import Chunk model using relative import
-import sys
-from pathlib import Path
-# Add parent directory to path to enable imports
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from data_processing.models import Chunk
+from src.data_processing.models import Chunk
 
 
 def configure_gemini(api_key: Optional[str] = None) -> None:
